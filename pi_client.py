@@ -4,25 +4,41 @@ import paho.mqtt.client as mqtt
 import base64
 
 SAMPLE_RATE = 16000
-DURATION = 2
+CHUNK_SIZE = 1024
+THRESHOLD = 0.02
 
 client = mqtt.Client()
 client.connect("broker.hivemq.com", 1883)
 
-def record_audio():
-    print("🎤 Recording...")
-    audio = sd.rec(int(SAMPLE_RATE * DURATION), samplerate=SAMPLE_RATE, channels=1)
-    sd.wait()
+def compute_energy(chunk):
+    return np.mean(np.abs(chunk))
+
+def record_event(stream):
+    print("🎯 Event detected, recording...")
+    frames = []
+
+    for _ in range(int(SAMPLE_RATE / CHUNK_SIZE * 2)):  # ~2 sec
+        chunk, _ = stream.read(CHUNK_SIZE)
+        frames.append(chunk)
+
+    audio = np.concatenate(frames)
+
     return audio
 
-while True:
-    input("Press Enter to record...")
+with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, blocksize=CHUNK_SIZE) as stream:
 
-    audio = record_audio()
-    sf.write("temp.wav", audio, SAMPLE_RATE)
+    print("🎤 Listening continuously...")
+    while True:
+        chunk, _ = stream.read(CHUNK_SIZE)
+        chunk = chunk.flatten()
+        energy = compute_energy(chunk)
 
-    with open("temp.wav", "rb") as f:
-        encoded = base64.b64encode(f.read()).decode()
+        if energy > THRESHOLD:
+            audio = record_event(stream)
+            sf.write("temp.wav", audio, SAMPLE_RATE)
+            with open("temp.wav", "rb") as f:
+                encoded = base64.b64encode(f.read()).decode()
 
-    client.publish("soniq/audio", encoded)
-    print("📡 Sent audio")
+            client.publish("soniq/audio", encoded)
+
+            print("📡 Sent event")
