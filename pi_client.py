@@ -2,6 +2,7 @@ import sounddevice as sd
 import soundfile as sf
 import paho.mqtt.client as mqtt
 import base64
+import numpy as np
 
 SAMPLE_RATE = 16000
 CHUNK_SIZE = 1024
