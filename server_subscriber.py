@@ -73,11 +73,11 @@ def on_message_audio(client, userdata, msg):
 
 if __name__ == "__main__":
     client = mqtt.Client()
-
     client.on_connect = on_connect
     client.on_message = on_message
 
-    # 🔥 CONNECT TO PI BROKER
+    client.tls_set()
+    client.connect("test.mosquitto.org", 8883, 60)
     client.connect(host="test.mosquitto.org", port=1883, keepalive=60)
 
     print("🟢 Listening for audio...\n")

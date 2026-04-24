@@ -56,8 +56,8 @@ if __name__ == '__main__':
     client = mqtt.Client()
     client.on_connect = on_connect
 
-    # 🔥 USE LOCAL PI BROKER
-    client.connect(host="test.mosquitto.org", port=1883, keepalive=60)
+    client.tls_set()
+    client.connect("test.mosquitto.org", 8883, 60)
 
     client.loop_start()
     time.sleep(1)
