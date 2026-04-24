@@ -1,45 +1,51 @@
-import sounddevice as sd
-import soundfile as sf
-import paho.mqtt.client as mqtt
+import subprocess
 import base64
+import paho.mqtt.client as mqtt
 import numpy as np
+import soundfile as sf
 
-SAMPLE_RATE = 16000
-CHUNK_SIZE = 1024
-THRESHOLD = 0.02
-
+MQTT_TOPIC = "soniq/audio"
 client = mqtt.Client()
-client.connect("broker.hivemq.com", 1883)
+client.connect("test.mosquitto.org", 1883)
 
-def compute_energy(chunk):
-    return np.mean(np.abs(chunk))
+def record_chunk():
+    subprocess.run([
+        "arecord",
+        "-D", "plughw:1,0",
+        "-f", "S16_LE",
+        "-r", "16000",
+        "-d", "0.5",
+        "chunk.wav"
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-def record_event(stream):
-    print("🎯 Event detected, recording...")
-    frames = []
-
-    for _ in range(int(SAMPLE_RATE / CHUNK_SIZE * 2)):  # ~2 sec
-        chunk, _ = stream.read(CHUNK_SIZE)
-        frames.append(chunk)
-
-    audio = np.concatenate(frames)
-
+    audio, _ = sf.read("chunk.wav")
     return audio
 
-with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, blocksize=CHUNK_SIZE) as stream:
+def compute_energy(audio):
+    return np.mean(np.abs(audio)), np.max(np.abs(audio))
 
-    print("🎤 Listening continuously...")
-    while True:
-        chunk, _ = stream.read(CHUNK_SIZE)
-        chunk = chunk.flatten()
-        energy = compute_energy(chunk)
+print("🎤 Listening...")
 
-        if energy > THRESHOLD:
-            audio = record_event(stream)
-            sf.write("temp.wav", audio, SAMPLE_RATE)
-            with open("temp.wav", "rb") as f:
-                encoded = base64.b64encode(f.read()).decode()
+while True:
+    audio = record_chunk()
 
-            client.publish("soniq/audio", encoded)
+    energy, peak = compute_energy(audio)
+    print(f"Energy: {energy:.4f}, Peak: {peak:.4f}", end="\r")
 
-            print("📡 Sent event")
+    if peak > 0.05:
+        print("\n🎯 Event detected!")
+
+        subprocess.run([
+            "arecord",
+            "-D", "plughw:1,0",
+            "-f", "S16_LE",
+            "-r", "16000",
+            "-d", "2",
+            "event.wav"
+        ])
+
+        with open("event.wav", "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
+
+        client.publish(MQTT_TOPIC, encoded)
+        print("📡 Sent event")

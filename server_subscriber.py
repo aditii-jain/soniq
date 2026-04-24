@@ -36,7 +36,7 @@ def on_message(client, userdata, msg):
 client = mqtt.Client()
 client.on_message = on_message
 
-client.connect("broker.hivemq.com", 1883)
+client.connect("test.mosquitto.org", 1883)
 client.subscribe("soniq/audio")
 
 print("🟢 Listening for audio...")
