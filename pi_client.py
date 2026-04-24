@@ -3,28 +3,21 @@ import base64
 import paho.mqtt.client as mqtt
 import numpy as np
 import soundfile as sf
-import socket
 import time
 
 MQTT_TOPIC = "soniq/audio"
+BROKER = "localhost"   # 🔥 LOCAL BROKER
 
-
-# ---------------------------
-# CALLBACK
-# ---------------------------
 def on_connect(client, userdata, flags, rc):
-    print("Connected to broker with result code", rc)
+    print("Connected to broker:", rc)
 
-# ---------------------------
-# AUDIO HELPERS
-# ---------------------------
 def record_chunk():
     subprocess.run([
         "arecord",
         "-D", "plughw:1,0",
         "-f", "S16_LE",
         "-r", "16000",
-        "-d", "1",   # 1 second chunk
+        "-d", "1",
         "chunk.wav"
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -48,30 +41,28 @@ def record_event():
 def compute_energy(audio):
     return np.mean(np.abs(audio)), np.max(np.abs(audio))
 
-# ---------------------------
-# MAIN
-# ---------------------------
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     client = mqtt.Client()
     client.on_connect = on_connect
 
-    client.tls_set()
-    client.connect("test.mosquitto.org", 8883, 60)
-
+    client.connect(BROKER, 1883, 60)
     client.loop_start()
-    time.sleep(1)
 
+    time.sleep(1)
     print("🎤 Listening...")
+
+    last_event_time = 0
 
     while True:
         audio = record_chunk()
-
         energy, peak = compute_energy(audio)
+
         print(f"Energy: {energy:.4f}, Peak: {peak:.4f}", end="\r")
 
-        # ✅ ONLY trigger when loud enough
-        if peak > 0.05:
+        # cooldown to avoid spam
+        if peak > 0.05 and time.time() - last_event_time > 3:
+            last_event_time = time.time()
+
             print("\n🎯 Event detected!")
 
             wav_path = record_event()

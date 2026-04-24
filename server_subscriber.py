@@ -3,18 +3,14 @@ import base64
 import numpy as np
 import soundfile as sf
 import tensorflow_hub as hub
-import tensorflow as tf
 
-# ---------------------------
-# LOAD MODEL (once)
-# ---------------------------
-print("Loading YAMNet...")
+print("Loading model...")
 model = hub.load("https://tfhub.dev/google/yamnet/1")
 print("Model loaded.\n")
 
-# ---------------------------
-# CLASSIFICATION
-# ---------------------------
+MQTT_TOPIC = "soniq/audio"
+BROKER = "localhost"
+
 def classify(audio, sr):
     if sr != 16000:
         import librosa
@@ -32,25 +28,12 @@ def classify(audio, sr):
 
     return "knock" if knock_score > alarm_score else "alarm"
 
-# ---------------------------
-# CALLBACKS (EE250 STYLE)
-# ---------------------------
-
 def on_connect(client, userdata, flags, rc):
-    print("Connected to broker with result code:", rc)
-
-    # subscribe to your topic
-    client.subscribe("soniq/audio")
-
-    # attach custom callback
-    client.message_callback_add("soniq/audio", on_message_audio)
+    print("Connected to broker:", rc)
+    client.subscribe(MQTT_TOPIC)
 
 def on_message(client, userdata, msg):
-    print("Default callback:", msg.topic)
-
-# custom callback
-def on_message_audio(client, userdata, msg):
-    print("📥 Received audio")
+    print("\n📥 Received audio")
 
     try:
         data = base64.b64decode(msg.payload)
@@ -62,24 +45,18 @@ def on_message_audio(client, userdata, msg):
 
         pred = classify(audio, sr)
 
-        print("🔍 Prediction:", pred, "\n")
+        print("🔍 Prediction:", pred)
 
     except Exception as e:
-        print("Error processing audio:", e)
-
-# ---------------------------
-# MAIN
-# ---------------------------
+        print("Error:", e)
 
 if __name__ == "__main__":
     client = mqtt.Client()
+
     client.on_connect = on_connect
     client.on_message = on_message
 
-    client.tls_set()
-    client.connect("test.mosquitto.org", 8883, 60)
-    client.connect(host="test.mosquitto.org", port=1883, keepalive=60)
+    client.connect(BROKER, 1883, 60)
 
-    print("🟢 Listening for audio...\n")
-
+    print("🟢 Listening...\n")
     client.loop_forever()
