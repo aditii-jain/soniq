@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Soniq Alert Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Welcome to Soniq</h1>
+      <p class="subtitle">Monitor classified sounds from your Raspberry Pi in one place.</p>
+
+      <section class="card">
+        <h2>Alert Preferences</h2>
+        <p>Select the sounds you want to be alerted for:</p>
+        <form id="alerts-form">
+          <label><input type="checkbox" name="alertType" value="knock" /> Knock</label>
+          <label><input type="checkbox" name="alertType" value="alarm" /> Alarm</label>
+          <label><input type="checkbox" name="alertType" value="name" id="name-checkbox" /> Name</label>
+          <button type="submit">Save Preferences</button>
+        </form>
+        <p id="alerts-message" class="message"></p>
+      </section>
+
+      <section class="card hidden" id="name-recorder-section">
+        <h2>Name Recording</h2>
+        <p>Record your name. It will be saved as <code>name.wav</code> in this project.</p>
+        <div class="row">
+          <button id="start-recording-btn" type="button">Start Recording</button>
+          <button id="stop-recording-btn" type="button" disabled>Stop Recording</button>
+        </div>
+        <p id="recording-status" class="message"></p>
+      </section>
+
+      <section class="card">
+        <h2>Live Detection</h2>
+        <p>Latest detected sound:</p>
+        <div id="latest-detection" class="detection">No sound detected yet.</div>
+      </section>
+
+      <footer class="site-footer">
+        Developed by Aditi Jain and Manasvi (Mana) Pula
+      </footer>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

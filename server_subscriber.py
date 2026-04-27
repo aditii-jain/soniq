@@ -4,8 +4,11 @@ import numpy as np
 import soundfile as sf
 import tensorflow_hub as hub
 import tensorflow as tf
+import os
+import requests
 
 model = hub.load("https://tfhub.dev/google/yamnet/1")
+WEB_SERVER_DETECTION_URL = os.environ.get("WEB_SERVER_DETECTION_URL", "http://127.0.0.1:5000/api/detection")
 
 def classify(audio, sr):
     if sr != 16000:
@@ -32,6 +35,15 @@ def on_message(client, userdata, msg):
     pred = classify(audio, sr)
 
     print("🔍 Prediction:", pred)
+    try:
+        response = requests.post(
+            WEB_SERVER_DETECTION_URL,
+            json={"sound": pred},
+            timeout=2,
+        )
+        response.raise_for_status()
+    except Exception as exc:
+        print("⚠️ Could not send detection to Flask server:", exc)
 
 client = mqtt.Client()
 client.on_message = on_message
