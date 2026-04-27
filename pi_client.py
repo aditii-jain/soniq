@@ -1,76 +1,142 @@
+import sys
+sys.path.insert(0, '/home/pi/GrovePi/Software/Python')
+sys.path.insert(0, '/home/pi/GrovePi/Software/Python/grove_rgb_lcd')
 import subprocess
-import base64
-import paho.mqtt.client as mqtt
 import numpy as np
 import soundfile as sf
+import tflite_runtime.interpreter as tflite
+import csv
 import time
+from collections import deque
+from grove_rgb_lcd import *
 
-MQTT_TOPIC = "soniq/audio"
-BROKER = "localhost"   # 🔥 LOCAL BROKER
+# ── Config ────────────────────────────────────────────────────
+SOUND_THRESHOLD = 0.01           # peak level to trigger classification
+COOLDOWN        = 3              # seconds between alerts
+MIN_SCORE       = 0.08           # minimum YAMNet confidence to print
+BUFFER_CHUNKS   = 2              # rolling buffer size (2 x 1s = 2s of audio)
 
-def on_connect(client, userdata, flags, rc):
-    print("Connected to broker:", rc)
+# Alert colors (R, G, B) for different sound types
+ALERT_COLORS = {
+    "siren":   (255, 0,   0),    # red
+    "alarm":   (255, 0,   0),    # red
+    "buzzer":  (255,0,0), 
+    "knock":   (255, 165, 0),    # orange
+    "speech":  (0,   0,   255),  # blue
+    "default": (0,   200, 100),  # green
+}
 
+# ── Load YAMNet ──────────────────────────────────────────────
+print("Loading YAMNet...")
+interpreter = tflite.Interpreter(model_path="/home/pi/soniq/yamnet.tflite")
+interpreter.allocate_tensors()
+input_details  = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+
+class_names = []
+with open("/home/pi/soniq/yamnet_class_map.csv", newline="") as f:
+    for row in csv.DictReader(f):
+        class_names.append(row["display_name"])
+
+SKIP = {"Silence", "White noise", "Static", "Background noise", "Noise"}
+print("✅ YAMNet ready.")
+
+
+# ── LCD setup ─────────────────────────────────────────────────
+time.sleep(1)
+setText("")
+setRGB(0, 200, 100)  # green backlight at startup
+print("✅ LCD ready.\n")
+
+# ── LCD helpers ───────────────────────────────────────────────
+def lcd_16(s):
+    s = str(s)
+    return s[:16].ljust(16)
+
+def show_on_lcd(label, score):
+    top    = lcd_16("DETECTED:")
+    bottom = lcd_16(f"{label} ({score:.2f})")
+    setText_norefresh(top + "\n" + bottom)
+
+    # Pick color based on label keyword
+    color = ALERT_COLORS["default"]
+    label_lower = label.lower()
+    for key, rgb in ALERT_COLORS.items():
+        if key in label_lower:
+            color = rgb
+            break
+    setRGB(*color)
+
+def clear_lcd():
+    setText("")
+    setRGB(0, 200, 100)
+
+# ── Classify ─────────────────────────────────────────────────
+def classify_sound(audio):
+    if audio.ndim > 1:
+        audio = audio.mean(axis=1)
+    audio = audio.astype(np.float32)
+
+    chunk_size = 15600
+    all_scores = []
+
+    for start in range(0, len(audio) - chunk_size + 1, chunk_size):
+        chunk = audio[start:start + chunk_size]
+        interpreter.set_tensor(input_details[0]['index'], chunk)
+        interpreter.invoke()
+        scores = interpreter.get_tensor(output_details[0]['index'])
+        all_scores.append(scores[0])
+
+    if not all_scores:
+        return None, 0.0
+
+    mean_scores = np.mean(all_scores, axis=0)
+    top_indices = np.argsort(mean_scores)[::-1][:5]
+
+    for idx in top_indices:
+        label = class_names[idx]
+        score = float(mean_scores[idx])
+        if label not in SKIP and score > MIN_SCORE:
+            return label, score
+
+    return None, 0.0
+
+# ── Record one chunk ──────────────────────────────────────────
 def record_chunk():
     subprocess.run([
-        "arecord",
-        "-D", "plughw:1,0",
-        "-f", "S16_LE",
-        "-r", "16000",
-        "-d", "1",
-        "chunk.wav"
+        "arecord", "-D", "plughw:1,0",
+        "-f", "S16_LE", "-r", "16000", "-c", "1",
+        "-d", "1", "/tmp/chunk.wav"
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    audio, _ = sf.read("chunk.wav")
+    audio, _ = sf.read("/tmp/chunk.wav")
     return audio
 
-def record_event():
-    print("🎯 Recording event...")
-
-    subprocess.run([
-        "arecord",
-        "-D", "plughw:1,0",
-        "-f", "S16_LE",
-        "-r", "16000",
-        "-d", "2",
-        "event.wav"
-    ])
-
-    return "event.wav"
-
-def compute_energy(audio):
-    return np.mean(np.abs(audio)), np.max(np.abs(audio))
-
+# ── Main ──────────────────────────────────────────────────────
 if __name__ == "__main__":
-    client = mqtt.Client()
-    client.on_connect = on_connect
+    last_alert = 0
+    buffer = deque(maxlen=BUFFER_CHUNKS)
 
-    client.connect(BROKER, 1883, 60)
-    client.loop_start()
-
-    time.sleep(1)
-    print("🎤 Listening...")
-
-    last_event_time = 0
+    print("🎤 Listening...\n")
 
     while True:
-        audio = record_chunk()
-        energy, peak = compute_energy(audio)
+        # Always record into rolling buffer
+        chunk = record_chunk()
+        buffer.append(chunk)
 
-        print(f"Energy: {energy:.4f}, Peak: {peak:.4f}", end="\r")
+        peak = float(np.max(np.abs(chunk)))
+        print(f"Peak: {peak:.4f}", end="\r")
 
-        # cooldown to avoid spam
-        if peak > 0.05 and time.time() - last_event_time > 3:
-            last_event_time = time.time()
+        if peak > SOUND_THRESHOLD and time.time() - last_alert > COOLDOWN:
+            last_alert = time.time()
+            print(f"\n⚡ Detected! (peak={peak:.3f})")
 
-            print("\n🎯 Event detected!")
+            # Classify what's already in the buffer — no extra recording needed
+            buffered_audio = np.concatenate(list(buffer))
+            label, score = classify_sound(buffered_audio)
 
-            wav_path = record_event()
-
-            with open(wav_path, "rb") as f:
-                encoded = base64.b64encode(f.read()).decode()
-
-            client.publish(MQTT_TOPIC, encoded)
-            print("📡 Sent event\n")
-
-        time.sleep(0.1)
+            if label:
+                print(f"🔊 {label}  ({score:.2f})\n")
+                show_on_lcd(label, score)
+            else:
+                print("🔊 unknown\n")
+                clear_lcd()
