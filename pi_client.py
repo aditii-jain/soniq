@@ -17,9 +17,11 @@ SOUND_THRESHOLD = 0.01           # peak level to trigger classification
 COOLDOWN        = 3              # seconds between alerts
 MIN_SCORE       = 0.08           # minimum YAMNet confidence to print
 BUFFER_CHUNKS   = 2              # rolling buffer size (2 x 1s = 2s of audio)
+LAPTOP_IP = os.environ.get("LAPTOP_IP", "192.0.0.2")
+WEBAPP_PORT = os.environ.get("WEBAPP_PORT", "5555")
 WEBAPP_DETECTION_URL = os.environ.get(
     "WEBAPP_DETECTION_URL",
-    "http://127.0.0.1:5555/api/detection",
+    f"http://{LAPTOP_IP}:{WEBAPP_PORT}/api/detection",
 )
 
 # Alert colors (R, G, B) for different sound types
