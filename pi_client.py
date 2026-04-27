@@ -18,7 +18,7 @@ COOLDOWN        = 3              # seconds between alerts
 MIN_SCORE       = 0.10           # minimum YAMNet confidence to print
 BUFFER_CHUNKS   = 2              # rolling buffer size (2 x 1s = 2s of audio)
 EVENT_DURATION  = 2              # seconds to record after trigger
-LAPTOP_IP = os.environ.get("LAPTOP_IP", "192.0.0.2")
+LAPTOP_IP = os.environ.get("LAPTOP_IP", "172.20.10.4")
 WEBAPP_PORT = os.environ.get("WEBAPP_PORT", "5555")
 WEBAPP_DETECTION_URL = os.environ.get(
     "WEBAPP_DETECTION_URL",
