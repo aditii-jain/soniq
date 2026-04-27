@@ -13,11 +13,10 @@ import requests
 from grove_rgb_lcd import *
 
 # ── Config ────────────────────────────────────────────────────
-SOUND_THRESHOLD = 0.02         # peak level to trigger classification
+SOUND_THRESHOLD = 0.02        # peak level to trigger classification
 COOLDOWN        = 3              # seconds between alerts
-MIN_SCORE       = 0.10           # minimum YAMNet confidence to print
-BUFFER_CHUNKS   = 2              # rolling buffer size (2 x 1s = 2s of audio)
-EVENT_DURATION  = 2              # seconds to record after trigger
+MIN_SCORE       = 0.08           # minimum YAMNet confidence to print
+BUFFER_CHUNKS   = 3              # rolling buffer size (3 x 1s = 3s of audio)
 LAPTOP_IP = os.environ.get("LAPTOP_IP", "172.20.10.4")
 WEBAPP_PORT = os.environ.get("WEBAPP_PORT", "5555")
 WEBAPP_DETECTION_URL = os.environ.get(
@@ -129,16 +128,6 @@ def record_chunk():
     audio, _ = sf.read("/tmp/chunk.wav")
     return audio
 
-def record_event():
-    """Record a fresh capture after a trigger for better classification quality."""
-    subprocess.run([
-        "arecord", "-D", "plughw:1,0",
-        "-f", "S16_LE", "-r", "16000", "-c", "1",
-        "-d", str(EVENT_DURATION), "/tmp/event.wav"
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    audio, _ = sf.read("/tmp/event.wav")
-    return audio
-
 # ── Main ──────────────────────────────────────────────────────
 if __name__ == "__main__":
     last_alert = 0
@@ -156,11 +145,11 @@ if __name__ == "__main__":
 
         if peak > SOUND_THRESHOLD and time.time() - last_alert > COOLDOWN:
             last_alert = time.time()
-            print(f"\n⚡ Detected! (peak={peak:.3f}) — recording event...")
+            print(f"\n⚡ Detected! (peak={peak:.3f})")
 
-            # Record a fresh 2-second clip for accurate classification
-            event_audio = record_event()
-            label, score = classify_sound(event_audio)
+            # Classify buffered pre-trigger audio — captures the full sound onset
+            buffered_audio = np.concatenate(list(buffer))
+            label, score = classify_sound(buffered_audio)
 
             if label:
                 print(f"🔊 {label}  ({score:.2f})\n")
