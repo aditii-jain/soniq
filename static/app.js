@@ -6,6 +6,8 @@ const startRecordingBtn = document.getElementById("start-recording-btn");
 const stopRecordingBtn = document.getElementById("stop-recording-btn");
 const recordingStatus = document.getElementById("recording-status");
 const latestDetection = document.getElementById("latest-detection");
+const introSection = document.getElementById("intro");
+const consoleSection = document.getElementById("console");
 
 let audioContext = null;
 let mediaStream = null;
@@ -150,13 +152,46 @@ async function refreshStatus() {
     const data = await res.json();
     const detection = data.last_detection;
     if (detection && detection.sound) {
-      latestDetection.textContent = `${detection.sound}`;
+      const scoreSuffix =
+        typeof detection.score === "number" ? ` (${detection.score.toFixed(2)})` : "";
+      latestDetection.textContent = `${detection.sound}${scoreSuffix}`;
     }
   } catch (err) {
     // Keep UI quiet if backend is temporarily unavailable.
   }
 }
 
+function smoothScrollToConsole() {
+  if (!consoleSection) return;
+
+  const startY = window.scrollY;
+  const targetY = consoleSection.offsetTop;
+  const distance = targetY - startY;
+  if (Math.abs(distance) < 8) return;
+
+  const durationMs = 1800;
+  const startTs = performance.now();
+
+  const step = (now) => {
+    const elapsed = now - startTs;
+    const progress = Math.min(1, elapsed / durationMs);
+    const eased = 1 - (1 - progress) ** 3;
+    window.scrollTo(0, startY + distance * eased);
+    if (progress < 1) requestAnimationFrame(step);
+  };
+
+  requestAnimationFrame(step);
+}
+
+function setupAutoIntroScroll() {
+  if (!introSection || !consoleSection) return;
+  window.scrollTo(0, 0);
+  window.setTimeout(() => {
+    smoothScrollToConsole();
+  }, 650);
+}
+
 updateNameSectionVisibility();
+setupAutoIntroScroll();
 refreshStatus();
 setInterval(refreshStatus, 2000);

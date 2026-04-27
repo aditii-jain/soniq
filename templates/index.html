@@ -7,15 +7,27 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   </head>
   <body>
-    <main class="container">
-      <h1>Welcome to Soniq</h1>
-      <p class="subtitle">Monitor classified sounds from your Raspberry Pi in one place.</p>
+    <section class="intro" id="intro">
+      <div class="intro-noise"></div>
+      <p class="eyebrow">SONIQ SYSTEM</p>
+      <h1 class="intro-title">We make digital sound intelligence.</h1>
+      <a class="scroll-cue" href="#console" aria-label="Scroll to live console">
+        <span>Scroll</span>
+        <span class="scroll-arrow">↓</span>
+      </a>
+    </section>
+
+    <main class="container" id="console">
+      <header class="hero">
+        <p class="eyebrow">LIVE CONSOLE</p>
+        <h1>Sound awareness dashboard.</h1>
+      </header>
 
       <section class="card">
         <h2>Alert Preferences</h2>
@@ -40,13 +52,13 @@
       </section>
 
       <section class="card">
-        <h2>Live Detection</h2>
-        <p>Latest detected sound:</p>
+        <h2>Live Feed</h2>
+        <p>Latest classified sound from Raspberry Pi:</p>
         <div id="latest-detection" class="detection">No sound detected yet.</div>
       </section>
 
       <footer class="site-footer">
-        Developed by Aditi Jain and Manasvi (Mana) Pula
+        Developed by Aditi Jain and Manasvi Pula
       </footer>
     </main>
 
