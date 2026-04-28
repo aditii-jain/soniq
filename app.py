@@ -22,12 +22,12 @@ state = {
 }
 
 # SSE: one Queue per connected browser tab.
-_sse_subscribers: list[queue.Queue] = []
+_sse_subscribers = []  # type: list
 _sse_lock = threading.Lock()
 
 
-def _broadcast_sse(data: dict) -> None:
-    dead: list[queue.Queue] = []
+def _broadcast_sse(data):
+    dead = []
     with _sse_lock:
         for q in _sse_subscribers:
             try:
@@ -45,7 +45,7 @@ def index():
     return render_template("index.html")
 
 
-@app.post("/api/alerts")
+@app.route("/api/alerts", methods=["POST"])
 def set_alert_preferences():
     payload = request.get_json(silent=True) or {}
     selected = payload.get("alerts", [])
@@ -65,7 +65,7 @@ def set_alert_preferences():
     return jsonify({"ok": True, "alerts": state["alerts"]})
 
 
-@app.post("/api/name-recording")
+@app.route("/api/name-recording", methods=["POST"])
 def save_name_recording():
     if "audio" not in request.files:
         return jsonify({"ok": False, "error": "No audio file provided"}), 400
@@ -83,7 +83,7 @@ def save_name_recording():
     return jsonify({"ok": True, "path": str(NAME_WAV_PATH.name)})
 
 
-@app.post("/api/detection")
+@app.route("/api/detection", methods=["POST"])
 def push_detection():
     payload = request.get_json(silent=True) or {}
     sound = payload.get("sound")
@@ -105,12 +105,12 @@ def push_detection():
     return jsonify({"ok": True, "last_detection": state["last_detection"]})
 
 
-@app.get("/api/events")
+@app.route("/api/events", methods=["GET"])
 def sse_stream():
     """Server-Sent Events endpoint — one persistent connection per browser tab."""
 
     def generate():
-        q: queue.Queue = queue.Queue(maxsize=20)
+        q = queue.Queue(maxsize=20)
         with _sse_lock:
             _sse_subscribers.append(q)
         try:
@@ -138,7 +138,7 @@ def sse_stream():
     )
 
 
-@app.get("/api/status")
+@app.route("/api/status", methods=["GET"])
 def status():
     return jsonify(state)
 
