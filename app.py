@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import os
+import queue
+import threading
 import time
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 app = Flask(__name__)
 
@@ -17,6 +20,22 @@ state = {
     "last_detection": None,
     "updated_at": None,
 }
+
+# SSE: one Queue per connected browser tab.
+_sse_subscribers: list[queue.Queue] = []
+_sse_lock = threading.Lock()
+
+
+def _broadcast_sse(data: dict) -> None:
+    dead: list[queue.Queue] = []
+    with _sse_lock:
+        for q in _sse_subscribers:
+            try:
+                q.put_nowait(data)
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            _sse_subscribers.remove(q)
 
 ALLOWED_ALERT_TYPES = {"knock", "alarm", "name"}
 
@@ -73,13 +92,50 @@ def push_detection():
     if not isinstance(sound, str) or not sound.strip():
         return jsonify({"ok": False, "error": "sound is required"}), 400
 
-    state["last_detection"] = {
+    detection = {
         "sound": sound.strip().lower(),
         "score": score,
         "at": time.time(),
     }
+    state["last_detection"] = detection
     state["updated_at"] = time.time()
+
+    _broadcast_sse({"type": "detection", "detection": detection, "alerts": state["alerts"]})
+
     return jsonify({"ok": True, "last_detection": state["last_detection"]})
+
+
+@app.get("/api/events")
+def sse_stream():
+    """Server-Sent Events endpoint — one persistent connection per browser tab."""
+
+    def generate():
+        q: queue.Queue = queue.Queue(maxsize=20)
+        with _sse_lock:
+            _sse_subscribers.append(q)
+        try:
+            while True:
+                try:
+                    data = q.get(timeout=25)
+                    yield f"data: {json.dumps(data)}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        finally:
+            with _sse_lock:
+                try:
+                    _sse_subscribers.remove(q)
+                except ValueError:
+                    pass
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.get("/api/status")
@@ -90,4 +146,4 @@ def status():
 if __name__ == "__main__":
     host = os.environ.get("FLASK_HOST", "0.0.0.0")
     port = int(os.environ.get("FLASK_PORT", "5555"))
-    app.run(host=host, port=port, debug=True)
+    app.run(host=host, port=port, debug=True, use_reloader=False, threaded=True)

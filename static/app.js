@@ -145,17 +145,80 @@ stopRecordingBtn.addEventListener("click", async () => {
   }
 });
 
+// ── Notification helpers ──────────────────────────────────────
+
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    await Notification.requestPermission();
+  }
+}
+
+function fireNotification(sound, score) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const scoreSuffix = typeof score === "number" ? ` (${score.toFixed(2)})` : "";
+  new Notification("Soniq Alert", {
+    body: `Detected: ${sound}${scoreSuffix}`,
+    icon: "https://cdn-icons-png.flaticon.com/512/727/727218.png",
+    tag: "soniq-detection",
+    renotify: true,
+  });
+}
+
+function getSelectedAlerts() {
+  return Array.from(document.querySelectorAll('input[name="alertType"]:checked')).map(
+    (el) => el.value
+  );
+}
+
+function updateDetectionUI(detection) {
+  if (!detection || !detection.sound) return;
+  const scoreSuffix =
+    typeof detection.score === "number" ? ` (${detection.score.toFixed(2)})` : "";
+  latestDetection.textContent = `${detection.sound}${scoreSuffix}`;
+}
+
+// ── Server-Sent Events ────────────────────────────────────────
+
+function connectSSE() {
+  const es = new EventSource("/api/events");
+
+  es.onmessage = (event) => {
+    let msg;
+    try {
+      msg = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (msg.type !== "detection") return;
+
+    const { detection, alerts } = msg;
+    updateDetectionUI(detection);
+
+    const selected = getSelectedAlerts();
+    const soundKey = (detection.sound || "").toLowerCase();
+    const shouldAlert =
+      selected.length === 0 ||
+      selected.some((pref) => soundKey.includes(pref));
+
+    if (shouldAlert) {
+      fireNotification(detection.sound, detection.score);
+    }
+  };
+
+  es.onerror = () => {
+    es.close();
+    // Reconnect after 3 s if the connection drops.
+    setTimeout(connectSSE, 3000);
+  };
+}
+
 async function refreshStatus() {
   try {
     const res = await fetch("/api/status");
     if (!res.ok) return;
     const data = await res.json();
-    const detection = data.last_detection;
-    if (detection && detection.sound) {
-      const scoreSuffix =
-        typeof detection.score === "number" ? ` (${detection.score.toFixed(2)})` : "";
-      latestDetection.textContent = `${detection.sound}${scoreSuffix}`;
-    }
+    updateDetectionUI(data.last_detection);
   } catch (err) {
     // Keep UI quiet if backend is temporarily unavailable.
   }
@@ -193,5 +256,6 @@ function setupAutoIntroScroll() {
 
 updateNameSectionVisibility();
 setupAutoIntroScroll();
-refreshStatus();
-setInterval(refreshStatus, 2000);
+refreshStatus();          // populate UI immediately from cached state
+connectSSE();             // live updates via SSE (replaces the polling interval)
+requestNotificationPermission();
