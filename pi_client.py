@@ -13,7 +13,7 @@ import requests
 from grove_rgb_lcd import *
 
 # ── Config ────────────────────────────────────────────────────
-SOUND_THRESHOLD = 0.02        # peak level to trigger classification
+SOUND_THRESHOLD = 0.02           # peak level to trigger classification
 COOLDOWN        = 3              # seconds between alerts
 MIN_SCORE       = 0.08           # minimum YAMNet confidence to print
 BUFFER_CHUNKS   = 3              # rolling buffer size (3 x 1s = 3s of audio)
@@ -47,14 +47,14 @@ with open("/home/pi/soniq/yamnet_class_map.csv", newline="") as f:
         class_names.append(row["display_name"])
 
 SKIP = {"Silence", "White noise", "Static", "Background noise", "Noise"}
-print("✅ YAMNet ready.")
+print("YAMNet ready.")
 
 
 # ── LCD setup ─────────────────────────────────────────────────
 time.sleep(1)
 setText("")
 setRGB(0, 200, 100)  # green backlight at startup
-print("✅ LCD ready.\n")
+print("LCD ready.\n")
 
 # ── LCD helpers ───────────────────────────────────────────────
 def lcd_16(s):
@@ -86,7 +86,7 @@ def send_detection_to_webapp(label, score):
         response.raise_for_status()
     except Exception as exc:
         # Keep detection loop resilient if network/webapp is unavailable.
-        print(f"⚠️ Failed to notify webapp: {exc}")
+        print(f" Failed to notify webapp: {exc}")
 
 # ── Classify ─────────────────────────────────────────────────
 def classify_sound(audio):
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     last_alert = 0
     buffer = deque(maxlen=BUFFER_CHUNKS)
 
-    print("🎤 Listening...\n")
+    print("Listening...\n")
 
     while True:
         # Always record into rolling buffer
@@ -145,16 +145,16 @@ if __name__ == "__main__":
 
         if peak > SOUND_THRESHOLD and time.time() - last_alert > COOLDOWN:
             last_alert = time.time()
-            print(f"\n⚡ Detected! (peak={peak:.3f})")
+            print(f"\n Detected! (peak={peak:.3f})")
 
             # Classify buffered pre-trigger audio — captures the full sound onset
             buffered_audio = np.concatenate(list(buffer))
             label, score = classify_sound(buffered_audio)
 
             if label:
-                print(f"🔊 {label}  ({score:.2f})\n")
+                print(f" {label}  ({score:.2f})\n")
                 show_on_lcd(label, score)
                 send_detection_to_webapp(label, score)
             else:
-                print("🔊 unknown\n")
+                print(" unknown\n")
                 clear_lcd()
