@@ -256,6 +256,6 @@ function setupAutoIntroScroll() {
 
 updateNameSectionVisibility();
 setupAutoIntroScroll();
-refreshStatus();          // populate UI immediately from cached state
-connectSSE();             // live updates via SSE (replaces the polling interval)
+refreshStatus();          
+connectSSE();             
 requestNotificationPermission();
